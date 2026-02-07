@@ -5,7 +5,7 @@ import { useState, useCallback } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 interface Props {
-    totalBudget: number;
+    budget: number;
     destination: string;
     days: number;
 }
@@ -23,7 +23,7 @@ const categoryConfig: Record<CategoryKey, { label: string; icon: string; color: 
     shopping: { label: "Shopping", icon: "🛍️", color: COLORS[4] },
 };
 
-export default function BudgetOptimizer({ totalBudget, destination, days }: Props) {
+export default function BudgetOptimizer({ budget, destination, days }: Props) {
     const [allocation, setAllocation] = useState<Record<CategoryKey, number>>({
         accommodation: 35,
         food: 25,
@@ -43,7 +43,7 @@ export default function BudgetOptimizer({ totalBudget, destination, days }: Prop
     const chartData = categories.map((cat, idx) => ({
         name: categoryConfig[cat].label,
         value: allocation[cat],
-        amount: Math.floor((totalBudget * allocation[cat]) / 100),
+        amount: Math.floor((budget * allocation[cat]) / 100),
         color: COLORS[idx],
     }));
 
@@ -63,7 +63,7 @@ export default function BudgetOptimizer({ totalBudget, destination, days }: Prop
         return "⚖️ Adjust the sliders to allocate your full budget.";
     };
 
-    const perDay = Math.floor(totalBudget / days);
+    const perDay = Math.floor(budget / days);
 
     return (
         <motion.div
@@ -89,7 +89,7 @@ export default function BudgetOptimizer({ totalBudget, destination, days }: Prop
                 </div>
                 <div className="text-right">
                     <div className="text-sm text-gray-600 dark:text-gray-400">Total Budget</div>
-                    <div className="text-2xl font-bold text-blue-600">${totalBudget.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-blue-600">${budget.toLocaleString()}</div>
                 </div>
             </div>
 
@@ -121,7 +121,7 @@ export default function BudgetOptimizer({ totalBudget, destination, days }: Prop
                     </h3>
                     {categories.map((category, idx) => {
                         const config = categoryConfig[category];
-                        const amount = Math.floor((totalBudget * allocation[category]) / 100);
+                        const amount = Math.floor((budget * allocation[category]) / 100);
 
                         return (
                             <motion.div

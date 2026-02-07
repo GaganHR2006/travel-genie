@@ -1,6 +1,13 @@
-// lib/tambo.tsx - ROBUST ERROR HANDLING
+// lib/tambo.tsx - ROBUST ERROR HANDLING WITH TRIP DETAILS
 import { travelComponents as registry } from "@/tambo-registry";
 import React from "react";
+
+export interface TripDetails {
+    destination: string;
+    days: string;
+    budget: string;
+    currency: string;
+}
 
 export interface TamboMessage {
     role: "user" | "assistant";
@@ -18,7 +25,8 @@ export interface TamboResponse {
 
 export async function processTamboMessage(
     userMessage: string,
-    conversationHistory: TamboMessage[]
+    conversationHistory: TamboMessage[],
+    tripDetails?: TripDetails
 ): Promise<TamboResponse> {
     try {
         const context = conversationHistory
@@ -39,6 +47,7 @@ export async function processTamboMessage(
                     name: r.name,
                     description: r.description,
                 })),
+                tripDetails: tripDetails || null,
             }),
             signal: controller.signal,
         });

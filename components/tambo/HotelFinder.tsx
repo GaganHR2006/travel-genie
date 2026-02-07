@@ -9,6 +9,8 @@ interface Props {
     checkOut?: string | null;
     guests?: number | null;
     generatedHotels?: any[];
+    currency?: string;
+    currencySymbol?: string;
 }
 
 const amenityIcons: Record<string, React.ReactNode> = {
@@ -26,7 +28,7 @@ const amenityIcons: Record<string, React.ReactNode> = {
     Locker: <span>🔐</span>,
 };
 
-export default function HotelFinder({ destination, checkIn, checkOut, guests, generatedHotels }: Props) {
+export default function HotelFinder({ destination, checkIn, checkOut, guests, generatedHotels, currency = "INR", currencySymbol = "₹" }: Props) {
     // Calculate nights with fallback
     const sanitizeDate = (date?: string | null) => {
         if (!date || date === "YYYY-MM-DD" || date.includes("YYYY")) return null;
@@ -172,16 +174,16 @@ export default function HotelFinder({ destination, checkIn, checkOut, guests, ge
                                     <div className="flex sm:flex-col items-end sm:items-end justify-between sm:justify-center gap-2 sm:min-w-[140px] sm:border-l sm:border-gray-200 dark:sm:border-gray-700 sm:pl-4">
                                         <div className="text-right">
                                             <div className="text-sm text-gray-500 dark:text-gray-400 line-through">
-                                                ${Math.floor(hotel.pricePerNight * 1.2)}/night
+                                                {currencySymbol}{Math.floor(hotel.pricePerNight * 1.2).toLocaleString()}/night
                                             </div>
                                             <div className="text-2xl font-bold text-purple-600">
-                                                ${hotel.pricePerNight}
+                                                {currencySymbol}{hotel.pricePerNight.toLocaleString()}
                                             </div>
                                             <div className="text-xs text-gray-500 dark:text-gray-400">
                                                 per night
                                             </div>
                                             <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
-                                                Total: ${totalPrice}
+                                                Total: {currencySymbol}{totalPrice.toLocaleString()}
                                             </div>
                                         </div>
                                         <motion.button

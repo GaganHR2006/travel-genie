@@ -10,6 +10,7 @@ interface Props {
     days: number;
     budget: number;
     currency?: string;
+    currencySymbol?: string;
     travelStyle?: "luxury" | "comfort" | "budget" | "backpacker";
     interests?: string[];
     generatedItinerary?: any[];
@@ -20,7 +21,8 @@ export default function SmartItineraryPlanner({
     destination,
     days,
     budget,
-    currency = "USD",
+    currency = "INR",
+    currencySymbol = "₹",
     travelStyle = "comfort",
     interests = [],
     generatedItinerary,
@@ -46,7 +48,7 @@ export default function SmartItineraryPlanner({
                         <span className="truncate">{destination}</span>
                     </h2>
                     <p className="text-sm md:text-base text-gray-600 dark:text-gray-400">
-                        {days} Days • {currency} {budget.toLocaleString()} • {travelStyle}
+                        {days} Days • {currencySymbol}{budget.toLocaleString()} • {travelStyle}
                     </p>
                 </div>
                 <div className="bg-emerald-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-semibold whitespace-nowrap">
@@ -92,7 +94,7 @@ export default function SmartItineraryPlanner({
                                                     <span className="font-medium text-gray-700 dark:text-gray-300">{act.time}:</span>{" "}
                                                     <span className="text-gray-600 dark:text-gray-400 break-words">{act.activity}</span>
                                                     {act.cost > 0 && (
-                                                        <span className="ml-2 text-emerald-600 font-semibold whitespace-nowrap">${act.cost}</span>
+                                                        <span className="ml-2 text-emerald-600 font-semibold whitespace-nowrap">{currencySymbol}{act.cost.toLocaleString()}</span>
                                                     )}
                                                 </div>
                                             </div>
@@ -108,11 +110,29 @@ export default function SmartItineraryPlanner({
                                         </button>
                                     )}
 
-                                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                        <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400">Daily Budget:</span>
-                                        <span className="font-bold text-gray-900 dark:text-white text-sm md:text-base">
-                                            ${day.budget || Math.floor(budget / days)}
-                                        </span>
+                                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                        {(() => {
+                                            const dailyTotal = day.activities.reduce((sum: number, act: any) => sum + (act.cost || 0), 0);
+                                            const dailyAllocated = day.budget || Math.floor(budget / days);
+                                            const remaining = dailyAllocated - dailyTotal;
+
+                                            return (
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                                                        <span>Activity Costs:</span>
+                                                        <span>{currencySymbol}{dailyTotal.toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white text-sm md:text-base">
+                                                        <span>Daily Budget:</span>
+                                                        <span>{currencySymbol}{dailyAllocated.toLocaleString()}</span>
+                                                    </div>
+                                                    <div className={`flex items-center justify-between text-xs font-medium ${remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                        <span>{remaining >= 0 ? 'Left for Food & Misc:' : 'Over Budget:'}</span>
+                                                        <span>{currencySymbol}{Math.abs(remaining).toLocaleString()}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </motion.div>
                             );
@@ -159,7 +179,7 @@ export default function SmartItineraryPlanner({
                                     <div className="w-2 h-2 md:w-3 md:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[idx] }} />
                                     <span className="text-xs md:text-sm text-gray-700 dark:text-gray-300 truncate">{item.category}</span>
                                 </div>
-                                <span className="font-semibold text-gray-900 dark:text-white text-sm md:text-base whitespace-nowrap">${item.amount}</span>
+                                <span className="font-semibold text-gray-900 dark:text-white text-sm md:text-base whitespace-nowrap">{currencySymbol}{item.amount.toLocaleString()}</span>
                             </div>
                         ))}
                     </div>

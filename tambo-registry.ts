@@ -49,9 +49,10 @@ export const travelComponents = [
     component: SmartItineraryPlanner,
     propsSchema: z.object({
       destination: z.string().describe('Travel destination'),
-      days: z.number().min(1).max(30).describe('Number of days'),
-      budget: z.number().describe('Total budget in USD'),
+      days: z.coerce.number().min(1).max(30).describe('Number of days'),
+      budget: z.coerce.number().describe('Total budget'),
       currency: z.string().optional().describe('Currency code'),
+      currencySymbol: z.string().optional().describe('Currency symbol'),
       travelStyle: z.enum(['luxury', 'comfort', 'budget', 'backpacker']).optional(),
       interests: z.array(z.string()).optional().describe('User interests like food, culture, adventure')
     }),
@@ -71,7 +72,7 @@ export const travelComponents = [
     description: 'Interactive budget allocation tool. Triggers: "optimize my budget", "how should I split $2000", "adjust my spending", "redistribute budget"',
     component: BudgetOptimizer,
     propsSchema: z.object({
-      totalBudget: z.number().describe('Total travel budget'),
+      budget: z.coerce.number().describe('Total travel budget'),
       destination: z.string().describe('Destination city/country'),
       days: z.number().describe('Trip duration in days')
     }),
@@ -133,7 +134,9 @@ export const travelComponents = [
       destination: z.string().describe('City or area to search'),
       checkIn: z.string().nullable().optional().describe('Check-in date'),
       checkOut: z.string().nullable().optional().describe('Check-out date'),
-      guests: z.number().nullable().optional().describe('Number of guests')
+      guests: z.coerce.number().nullable().optional().describe('Number of guests'),
+      currency: z.string().optional().describe('Currency code'),
+      currencySymbol: z.string().optional().describe('Currency symbol')
     }),
   },
   {

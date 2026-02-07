@@ -33,6 +33,7 @@
     "d3-scale": "^4.0.2",
     "dompurify": "^3.3.1",
     "framer-motion": "^12.31.0",
+    "groq-sdk": "^0.37.0",
     "highlight.js": "^11.11.1",
     "json-stringify-pretty-compact": "^4.0.0",
     "lucide-react": "^0.563.0",

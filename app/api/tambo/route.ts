@@ -1,23 +1,44 @@
-// app/api/tambo/route.ts - MIGRATED TO GOOGLE GEMINI
+// app/api/tambo/route.ts - USING GROQ API with CURRENCY SUPPORT
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000;
 
-async function callGeminiWithRetry(prompt: string, retries = 0): Promise<string> {
+// Currency symbols map
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  "INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥",
+  "AUD": "A$", "CAD": "C$", "AED": "د.إ", "SGD": "S$", "THB": "฿"
+};
+
+// Reliable hotel images from Unsplash
+const HOTEL_IMAGES = [
+  "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
+  "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&q=80",
+  "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800&q=80",
+  "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
+  "https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80",
+  "https://images.unsplash.com/photo-1445019980597-93fa8acb246c?w=800&q=80",
+];
+
+async function callGroqWithRetry(prompt: string, retries = 0): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.1-8b-instant",
+      temperature: 0.7,
+      max_tokens: 4096,
+      top_p: 1,
+      stream: false,
+      stop: null
+    });
+    return chatCompletion.choices[0]?.message?.content || "";
   } catch (error: any) {
     if (retries < MAX_RETRIES) {
-      // Exponential backoff
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retries + 1)));
-      return callGeminiWithRetry(prompt, retries + 1);
+      return callGroqWithRetry(prompt, retries + 1);
     }
     throw error;
   }
@@ -25,13 +46,25 @@ async function callGeminiWithRetry(prompt: string, retries = 0): Promise<string>
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, context, registry } = await request.json();
+    const { message, context, registry, tripDetails } = await request.json();
+
+    // Extract currency from trip details
+    const currency = tripDetails?.currency || "INR";
+    const currencySymbol = CURRENCY_SYMBOLS[currency] || "₹";
+    const budget = tripDetails?.budget || 10000;
+    const destination = tripDetails?.destination || "";
+    const days = tripDetails?.days || 5;
 
     // Build conversation history for context
     const conversationHistory = context ? `Previous conversation:\n${context}\n\n` : "";
 
     // UNIFIED PROMPT - Always check for component triggers
     const unifiedPrompt = `You are Travel Genie AI. Analyze the user's message and decide which component(s) to render.
+
+IMPORTANT: The user's currency is ${currency} (${currencySymbol}). ALL PRICES MUST BE IN ${currency} ONLY.
+User's destination: ${destination}
+User's budget: ${currencySymbol}${budget} ${currency}
+Trip duration: ${days} days
 
 ${conversationHistory}USER MESSAGE: "${message}"
 
@@ -54,6 +87,7 @@ IMPORTANT:
 - If user asks for weather, you MUST use WeatherAlerts component
 - If just chatting/asking general questions → conversational response only (no component)
 - For trip planning questions → SmartItineraryPlanner component
+- ALWAYS USE ${currency} for all prices!
 
 Respond with ONLY valid JSON (no markdown, no code blocks):
 {
@@ -67,46 +101,9 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
   ]
 }
 
-If no component needed, use empty array: "components": []
+If no component needed, use empty array: "components": []`;
 
-Examples:
-
-User: "show me hotels"
-Response: {
-  "message": "Here are some great hotel options for you!",
-  "components": [{
-    "name": "HotelFinder",
-    "needsGeneration": false,
-    "props": {
-      "destination": "extracted location",
-      "checkIn": "2026-02-15",
-      "checkOut": "2026-02-20",
-      "guests": 1
-    }
-  }]
-}
-
-User: "what's the best food to try?"
-Response: {
-  "message": "You should definitely try local delicacies like...",
-  "components": []
-}
-
-User: "I have $2000 for 7 days in Tokyo"
-Response: {
-  "message": "Perfect! I've created a personalized 7-day itinerary for Tokyo.",
-  "components": [{
-    "name": "SmartItineraryPlanner",
-    "needsGeneration": true,
-    "props": {
-      "destination": "Tokyo, Japan",
-      "days": 7,
-      "budget": 2000
-    }
-  }]
-}`;
-
-    const textResponse = await callGeminiWithRetry(unifiedPrompt);
+    const textResponse = await callGroqWithRetry(unifiedPrompt);
 
     let aiResponse;
     try {
@@ -137,17 +134,53 @@ Response: {
     if (aiResponse.components && aiResponse.components.length > 0) {
       for (let comp of aiResponse.components) {
 
+        // Normalize SmartItineraryPlanner props
+        if (comp.name === "SmartItineraryPlanner") {
+          // Fix 'duration' -> 'days' and extract numeric values
+          const rawDays = comp.props.days || comp.props.duration || days;
+          const rawBudget = comp.props.budget || budget;
+
+          // Extract numeric value from strings like "5 days" or "₹10000"
+          const extractNumber = (val: any): number => {
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') {
+              const match = val.replace(/[^\d.]/g, '');
+              return parseFloat(match) || 0;
+            }
+            return 0;
+          };
+
+          comp.props.days = extractNumber(rawDays) || days;
+          comp.props.budget = extractNumber(rawBudget) || budget;
+          comp.props.destination = comp.props.destination || destination;
+          comp.props.currency = currency;
+          comp.props.currencySymbol = currencySymbol;
+          delete comp.props.duration; // Remove incorrect prop
+        }
+
+        // Normalize HotelFinder props
+        if (comp.name === "HotelFinder") {
+          comp.props.destination = comp.props.destination || destination;
+          comp.props.currency = currency;
+          comp.props.currencySymbol = currencySymbol;
+        }
+
         // Generate itinerary if needed
         if (comp.needsGeneration && comp.name === "SmartItineraryPlanner") {
-          const { destination, days, budget } = comp.props;
+          const itineraryDays = comp.props.days;
+          const itineraryBudget = comp.props.budget;
+          const itineraryDestination = comp.props.destination;
 
-          const itineraryPrompt = `Create a UNIQUE ${days}-day itinerary for ${destination} with $${budget} budget.
+          const itineraryPrompt = `Create a UNIQUE ${itineraryDays}-day itinerary for ${itineraryDestination} with ${currencySymbol}${itineraryBudget} ${currency} budget.
+
+CRITICAL: ALL COSTS MUST BE IN ${currency} (${currencySymbol}) ONLY. NO OTHER CURRENCY.
 
 Rules:
 - Each day must have 3 COMPLETELY DIFFERENT activities (morning, afternoon, evening)
 - NO REPEATED ACTIVITIES across all days
-- Include realistic costs for each activity
+- Include REALISTIC costs in ${currency} for each activity
 - Use actual place names when possible
+- Costs should be reasonable for ${itineraryDestination} in ${currency}
 
 Respond with ONLY this JSON (no markdown):
 {
@@ -155,39 +188,31 @@ Respond with ONLY this JSON (no markdown):
     {
       "day": 1,
       "activities": [
-        { "time": "Morning", "activity": "Unique activity 1", "cost": 0 },
-        { "time": "Afternoon", "activity": "Unique activity 2", "cost": 50 },
-        { "time": "Evening", "activity": "Unique activity 3", "cost": 80 }
+        { "time": "Morning", "activity": "Activity name", "cost": 500 },
+        { "time": "Afternoon", "activity": "Activity name", "cost": 800 },
+        { "time": "Evening", "activity": "Activity name", "cost": 1200 }
       ]
     }
   ],
   "budgetBreakdown": [
-    { "category": "Accommodation", "amount": ${Math.floor(budget * 0.35)}, "percentage": 35 },
-    { "category": "Food & Dining", "amount": ${Math.floor(budget * 0.25)}, "percentage": 25 },
-    { "category": "Activities", "amount": ${Math.floor(budget * 0.20)}, "percentage": 20 },
-    { "category": "Transportation", "amount": ${Math.floor(budget * 0.15)}, "percentage": 15 },
-    { "category": "Shopping", "amount": ${Math.floor(budget * 0.05)}, "percentage": 5 }
+    { "category": "Accommodation", "amount": ${Math.floor(itineraryBudget * 0.35)}, "percentage": 35 },
+    { "category": "Food & Dining", "amount": ${Math.floor(itineraryBudget * 0.25)}, "percentage": 25 },
+    { "category": "Activities", "amount": ${Math.floor(itineraryBudget * 0.20)}, "percentage": 20 },
+    { "category": "Transportation", "amount": ${Math.floor(itineraryBudget * 0.15)}, "percentage": 15 },
+    { "category": "Shopping", "amount": ${Math.floor(itineraryBudget * 0.05)}, "percentage": 5 }
   ]
 }`;
 
-          const itineraryText = await callGeminiWithRetry(itineraryPrompt);
+          const itineraryText = await callGroqWithRetry(itineraryPrompt);
 
           try {
-            // Robust JSON extraction
             let generated;
             try {
-              // try standard parse
               generated = JSON.parse(itineraryText);
             } catch (e) {
-              // try extracting from markdown or finding first { and last }
               const jsonMatch = itineraryText.match(/\{[\s\S]*\}/);
               if (jsonMatch) {
-                try {
-                  generated = JSON.parse(jsonMatch[0]);
-                } catch (e2) {
-                  console.error("Failed to parse extracted JSON:", e2);
-                  throw e2;
-                }
+                generated = JSON.parse(jsonMatch[0]);
               } else {
                 throw new Error("No JSON found in response");
               }
@@ -195,21 +220,30 @@ Respond with ONLY this JSON (no markdown):
 
             comp.props.generatedItinerary = generated.itinerary;
             comp.props.generatedBudget = generated.budgetBreakdown;
+            comp.props.currency = currency;
+            comp.props.currencySymbol = currencySymbol;
           } catch (e) {
             console.error("Itinerary generation error:", e);
-            // Keep going without generated data - will use mock
           }
         }
 
         // Generate hotels if needed
         if (comp.name === "HotelFinder") {
-          const { destination } = comp.props;
+          const hotelDestination = comp.props.destination || destination;
 
-          const hotelPrompt = `Find 4 REAL and highly-rated hotels in ${destination}.
-          
+          const hotelPrompt = `Find 4 REAL and highly-rated hotels in ${hotelDestination}.
+
+CRITICAL: ALL PRICES MUST BE IN ${currency} (${currencySymbol}) ONLY. 
+
+For ${currency}, use REALISTIC local prices:
+- Budget hotels: ${currency === "INR" ? "₹1500-3000" : currency === "USD" ? "$50-100" : "€50-100"} per night
+- Mid-range: ${currency === "INR" ? "₹3000-6000" : currency === "USD" ? "$100-200" : "€100-200"} per night
+- Luxury: ${currency === "INR" ? "₹8000-20000" : currency === "USD" ? "$200-500" : "€200-500"} per night
+
 Rules:
 - Provide a mix of luxury, boutique, and budget options
-- REAL names, prices, and amenities
+- REAL hotel names for ${hotelDestination}
+- All prices in ${currency} ONLY
 - 1 "Best Value" option
 - 1 "Luxury" option
 
@@ -219,18 +253,18 @@ Respond with ONLY this JSON (no markdown):
     {
       "name": "Hotel Name",
       "stars": 4,
-      "pricePerNight": 150,
-      "location": "City Center",
+      "pricePerNight": 3500,
+      "originalPrice": 4500,
+      "location": "Area Name",
       "amenities": ["Pool", "WiFi", "Spa"],
       "rating": 4.5,
-      "reviews": 1200,
-      "image": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"
+      "reviews": 1200
     }
   ]
 }`;
 
           try {
-            const hotelText = await callGeminiWithRetry(hotelPrompt);
+            const hotelText = await callGroqWithRetry(hotelPrompt);
             let generated;
             try {
               generated = JSON.parse(hotelText);
@@ -244,27 +278,23 @@ Respond with ONLY this JSON (no markdown):
             }
 
             if (generated.hotels) {
-              console.log(`Generated ${generated.hotels.length} hotels for ${destination}`); // DEBUG LOG
-              const hotelImages = [
-                "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
-                "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800",
-                "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800",
-                "https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=800"
-              ];
+              console.log(`Generated ${generated.hotels.length} hotels for ${hotelDestination}`);
 
+              // Force reliable images and ensure currency
               generated.hotels = generated.hotels.map((h: any, i: number) => ({
                 ...h,
-                image: h.image?.startsWith("http") ? h.image : hotelImages[i % hotelImages.length]
+                image: HOTEL_IMAGES[i % HOTEL_IMAGES.length],
+                currency: currency,
+                currencySymbol: currencySymbol,
               }));
+
               comp.props.generatedHotels = generated.hotels;
+              comp.props.currency = currency;
+              comp.props.currencySymbol = currencySymbol;
               comp.needsGeneration = false;
-            } else {
-              console.warn("Hotel generation returned no 'hotels' array:", generated);
             }
           } catch (e) {
             console.error("Hotel generation error:", e);
-            // Log the raw text to see why parse failed
-            // console.error("Raw Hotel Text:", hotelText); 
           }
         }
       }
@@ -275,7 +305,6 @@ Respond with ONLY this JSON (no markdown):
   } catch (error: any) {
     console.error("Tambo API error:", error);
 
-    // Rate limit handling (Google 429)
     if (error.status === 429 || (error.message && (error.message.includes('429') || error.message.includes('quota') || error.message.includes('limit')))) {
       return NextResponse.json(
         {

@@ -18,12 +18,7 @@ interface Props {
 }
 
 const DESTINATIONS = [
-    { name: "Tokyo", coordinates: [139.6917, 35.6895], country: "Japan" },
-    { name: "Paris", coordinates: [2.3522, 48.8566], country: "France" },
-    { name: "Santorini", coordinates: [25.4317, 36.3932], country: "Greece" },
-    { name: "Dubai", coordinates: [55.2708, 25.2048], country: "UAE" },
-    { name: "Bali", coordinates: [115.1889, -8.4095], country: "Indonesia" },
-    { name: "New York", coordinates: [-74.006, 40.7128], country: "USA" },
+    // Removed - map is now purely interactive without pins
 ];
 
 // Earth tone palette for the wooden map look
@@ -127,7 +122,7 @@ const WorldMapExplorer = ({ onDestinationClick }: Props) => {
                         { name: "BRAZIL", coordinates: [-55, -10] },
                         { name: "CHINA", coordinates: [105, 35] },
                         { name: "AUSTRALIA", coordinates: [135, -25] },
-                        { name: "AFRICA", coordinates: [20, 10] }, // Continent label approximate
+                        { name: "AFRICA", coordinates: [20, 10] },
                     ].map((label) => (
                         <Annotation
                             key={label.name}
@@ -141,7 +136,7 @@ const WorldMapExplorer = ({ onDestinationClick }: Props) => {
                                 y={0}
                                 textAnchor="middle"
                                 alignmentBaseline="middle"
-                                fill="#3E2723" // Dark wood color
+                                fill="#3E2723"
                                 fontSize={10}
                                 fontWeight="bold"
                                 style={{ pointerEvents: "none", letterSpacing: "2px", opacity: 0.7 }}
@@ -149,41 +144,6 @@ const WorldMapExplorer = ({ onDestinationClick }: Props) => {
                                 {label.name}
                             </text>
                         </Annotation>
-                    ))}
-
-                    {/* Destination Markers */}
-                    {DESTINATIONS.map(({ name, coordinates, country }) => (
-                        <Marker key={name} coordinates={coordinates as [number, number]}>
-                            <g
-                                className="cursor-pointer group"
-                                onClick={() => onDestinationClick?.(`${name}, ${country}`)}
-                                style={{ transform: "translate(-12px, -24px)" }}
-                            >
-                                {/* Pulse Effect */}
-                                <circle r={8} fill="#ef4444" opacity={0.3}>
-                                    <animate attributeName="r" from="8" to="16" dur="1.5s" repeatCount="indefinite" />
-                                    <animate attributeName="opacity" from="0.6" to="0" dur="1.5s" repeatCount="indefinite" />
-                                </circle>
-
-                                {/* Pin Icon */}
-                                <path
-                                    d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
-                                    fill="#ef4444"
-                                    stroke="#fff"
-                                    strokeWidth={2}
-                                    style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }}
-                                />
-                                <circle cx="12" cy="9" r="2.5" fill="#fff" />
-
-                                {/* Tooltip on Hover */}
-                                <foreignObject x="-60" y="-45" width="150" height="50" style={{ overflow: "visible" }}>
-                                    <div className="hidden group-hover:block bg-white/90 backdrop-blur-sm px-2 py-1 rounded shadow-lg text-xs font-bold text-gray-800 border border-amber-200 text-center whitespace-nowrap absolute left-1/2 -translate-x-1/2 bottom-0 w-auto">
-                                        {name}
-                                        <div className="text-[10px] font-normal text-gray-600">{country}</div>
-                                    </div>
-                                </foreignObject>
-                            </g>
-                        </Marker>
                     ))}
                 </ComposableMap>
 
